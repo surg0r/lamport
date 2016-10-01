@@ -162,24 +162,7 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
         priv.append((a,b))
         pub.append((sha256(a),sha256(b)))
 
-
     return priv, pub
-
-
-def random_qkey():      #create random merkle tree signature keypair
-
-    priv = []
-    for x in range(0,8):
-        priv.append(random_key())
-
-    tree = Merkle()
-    private_key = tree.create_tree(priv)
-    pub_key = priv[len(private_key)]
-    return pub_key, private_key
-
-# number of branches (n) up from base hash leaf constituents (l) to root is as follows:
-# n=1 l(=1), n=2 l(>2<=4), n=3 l(>4<=8), n=4 l(>8<=16), n=5 l(>16<=32), n=6 l(>32<=64), n=7 l(<64>=128), n=8 l(>128<=256), n=9 l(>256<=512),
-
 
 def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     
@@ -196,8 +179,6 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     #print pubhashes
 
     a = Merkle(pub=pubhashes)
-
-
 
     return data, a.merkle_tree                 #array of wots classes full of data..
 
