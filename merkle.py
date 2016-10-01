@@ -172,7 +172,7 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     pubhashes = []
 
     for x in range(signatures):
-        data.append(WOTS())
+        data.append(WOTS(x))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
@@ -187,7 +187,7 @@ def random_ldmss(signatures=4):
     pubhashes = []
 
     for x in range(signatures):
-        data.append(LDOTS())
+        data.append(LDOTS(x))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
@@ -199,9 +199,10 @@ def random_ldmss(signatures=4):
 
 
 class LDOTS():
-    def __init__(self):
+    def __init__(self, index=0):
+        self.index = index
         self.concatpub = ""
-        print 'New LD keypair generation'
+        print 'New LD keypair generation ', str(self.index)
         self.priv, self.pub = random_lkey()
         
         self.publist = [i for sub in self.pub for i in sub]    #convert list of tuples to list to allow cat.    
@@ -217,9 +218,10 @@ class LDOTS():
         return
 
 class WOTS():
-    def __init__(self):
+    def __init__(self, index=0):
+        self.index = index
         self.concatpub = ""
-        print 'New W-OTS keypair generation'
+        print 'New W-OTS keypair generation ', str(self.index)
         self.priv, self.pub = random_wkey()
                 
         self.concatpub = ''.join(self.pub)
