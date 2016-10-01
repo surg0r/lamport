@@ -162,12 +162,13 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
         priv.append((a,b))
         pub.append((sha256(a),sha256(b)))
 
+
     return priv, pub
+
 
 def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     
     data = []
-
     pubhashes = []
 
     for x in range(signatures):
@@ -176,16 +177,47 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
 
-    #print pubhashes
+    a = Merkle(pub=pubhashes)
+    return data, a                 #array of wots classes full of data.. and a class full of merkle
+
+
+def random_ldmss(signatures=4):
+
+    data = []
+    pubhashes = []
+
+    for x in range(signatures):
+        data.append(LDOTS())
+
+    for i in range(len(data)):
+        pubhashes.append(data[i].pubhash)
 
     a = Merkle(pub=pubhashes)
+    return data, a                 
 
-    return data, a.merkle_tree                 #array of wots classes full of data..
 
+
+
+class LDOTS():
+    def __init__(self):
+        self.concatpub = ""
+        print 'New LD keypair generation'
+        self.priv, self.pub = random_lkey()
+        
+        self.publist = [i for sub in self.pub for i in sub]    #convert list of tuples to list to allow cat.    
+        self.concatpub = ''.join(self.publist)
+        self.pubhash = sha256(self.concatpub)
+        return
+
+    def screen_print(self):
+        print numlist(self.priv)
+        print numlist(self.pub)
+        print self.concatpub
+        print self.pubhash
+        return
 
 class WOTS():
     def __init__(self):
-    
         self.concatpub = ""
         print 'New W-OTS keypair generation'
         self.priv, self.pub = random_wkey()
@@ -205,12 +237,12 @@ class WOTS():
 class Merkle():
 
  def __init__(self, pub=[],priv=[],signatures=0):
-    self.merkle_base = pub
-    self.merkle_priv = priv
+    self.base = pub
+    self.priv = priv
     self.signatures = len(priv)
-    self.merkle_tree = []
-    self.num_leaves = len(self.merkle_base)
-    if not self.merkle_base:
+    self.tree = []
+    self.num_leaves = len(self.base)
+    if not self.base:
         return
     else:
         self.create_tree()
@@ -240,9 +272,10 @@ class Merkle():
     elif self.num_leaves >256 and self.num_leaves <=512:
         num_branches = 9
 
-    self.merkle_tree.append(self.merkle_base)
+    self.num_branches = num_branches
+    self.tree.append(self.base)
 
-    hashlayer = self.merkle_base
+    hashlayer = self.base
 
     for x in range(num_branches):       #iterate through each layer of the merkle tree starting with the base layer
         temp_array = []
@@ -256,10 +289,12 @@ class Merkle():
              temp_array.append(sha256(str(hashlayer[y])+str(hashlayer[y+1])))
              y=y+2
 
-        self.merkle_tree.append(temp_array)
+        self.tree.append(temp_array)
         hashlayer = temp_array
-    print 'Merkle tree created with '+str(self.num_leaves),' leaves, and '+str(num_branches)+' to root.'
-    return self.merkle_tree
+    self.root = temp_array
+    self.height = len(self.tree)
+    print 'Merkle tree created with '+str(self.num_leaves),' leaves, and '+str(self.num_branches)+' to root.'
+    return self.tree
 
  def check_item(self):
      return
