@@ -1,4 +1,4 @@
-# lamport
+# Hash based signatures
 Quantum resistant lamport-diffie, winternitz and merkle tree hash based signature functions (in progress)..
 
 Currently supports LD-OTS and W-OTS keypair gen, signing and verification using sha256.
@@ -22,7 +22,7 @@ To verify a signature:
 Returns true or false.
  
  
-<b>Winternitz one time signature scheme</b>
+<b>Winternitz one time signature scheme (W-OTS)</b>
 
 Based upon the initial scheme. Reduces key sizes and signatures significantly but increases computation time. Keypair generation creates 32 256 bit random private keys. When w=8 they are each hashed 255 times (2^w-1), then a further hash is performed, to create 32 256 bit public keys. Signature involves parsing the hash of the message 8 bits at a time (can be done 16 but this increases hash computation cycles significantly, from 0.01s to 3.7s), the 8 bit binary int (n) is subtracted from 256 and the private key is self hashed 256-n times. Thus the signature is 32 separate iterative hashes derived from the random private keys based up on the bitstream of the hash-message. To verify the message, the recipient knows the message and the public key and the signature, she simply parses the hash of the signature (8 bits at a time, extracting the 8 bit int, n) and then iteratively hashes the signature hashes n times. If the signature and message matches the public key then the public key is created from the signature. This is a one time signature which can be extended like the LD-OTS with a merkle tree to both reduce the public key size and increase the number of signs.
 
