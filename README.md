@@ -54,6 +54,7 @@ Evaluates whether message signature is valid by recreating the public key from t
 
 
 
+
 <b>Winternitz-OTS and Merkle Signature Scheme</b>
 
 Creating more than one set of W-OTS keypairs and hashing the concatenated 32 256 public keys fragments for each keypair allows a merkle tree to be created. The pubhashes are concatenated and hashed upwards in a tree to the root.
