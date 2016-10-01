@@ -50,4 +50,4 @@ To verify a signature:
 
 <b>verify_lkey(sig, message, pub)</b>
   
-Evaluates whether message signature is valid by creating the public key from the signature. Returns true or false.
+Evaluates whether message signature is valid by recreating the public key from the signature. Returns true or false.
