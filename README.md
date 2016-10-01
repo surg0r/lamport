@@ -55,15 +55,19 @@ Evaluates whether message signature is valid by recreating the public key from t
 
 
 
-<b>Winternitz-OTS and Merkle Signature Scheme</b>
+<b>Winternitz-OTS or LDOTS and Merkle Signature Scheme</b>
 
-Creating more than one set of W-OTS keypairs and hashing the concatenated 32 256 public keys fragments for each keypair allows a merkle tree to be created. The pubhashes are concatenated and hashed upwards in a tree to the root.
+Creating more than one set of W-OTS keypairs and hashing the concatenated 32 256 public keys fragments for each keypair allows a merkle tree to be created. The pubhashes are concatenated and hashed upwards in a tree to the root. The same is true of the larger Lamport-Diffie OTS signatures. 
 
 <b>Usage:</b>
 
 To create a batch of W-OTS keypairs and link them to a merkle tree:
 
-<b> data, merkle_tree = random_wmss(20)</b>
+<b> data, merkle = random_wmss(20)</b>
 
 
-Returns confirmation of each of 20 (in this case) keypairs created and timings and details of the merkle tree. Data for each W-OTS are held in a list of classes in data (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree is an inverted list of lists starting with the base leaves, with a list for each layer of hashes to the root.
+To create n LD-OTS keypairs and link them to a merkle tree:
+
+<b> data, merkle = random_ldmss(n) </b>
+
+Returns confirmation of each of 20/n keypairs created and timings and details of the merkle tree. Data for each W-OTS keypair are held in a list containing classes with data accessible (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree class is returned allowing similar access to associated data (e.g. merkle.root, merkle.base, merkle.height, merkle.num_leaves, merkle.tree.  
