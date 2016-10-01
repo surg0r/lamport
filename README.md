@@ -66,4 +66,4 @@ To create a batch of W-OTS keypairs and link them to a merkle tree:
 <b> data, merkle_tree = random_wmss(20)</b>
 
 
-Returns confirmation of each keypair created and timings and details of the merkle tree. Data for each W-OTS are held in a list of classes in data (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree is an inverted list of lists starting with the base leaves, with a list for each layer of hashes to the root.
+Returns confirmation of each of 20 (in this case) keypairs created and timings and details of the merkle tree. Data for each W-OTS are held in a list of classes in data (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree is an inverted list of lists starting with the base leaves, with a list for each layer of hashes to the root.
