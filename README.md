@@ -51,3 +51,18 @@ To verify a signature:
 <b>verify_lkey(sig, message, pub)</b>
   
 Evaluates whether message signature is valid by recreating the public key from the signature. Returns true or false.
+
+
+
+<b>Winternitz-OTS and Merkle Signature Scheme</b>
+
+Creating more than one set of W-OTS keypairs and hashing the concatenated 32 256 public keys fragments for each keypair allows a merkle tree to be created. The pubhashes are concatenated and hashed upwards in a tree to the root.
+
+<b>Usage:</b>
+
+To create a batch of W-OTS keypairs and link them to a merkle tree:
+
+<b> data, merkle_tree = random_wmss(20)</b>
+
+
+Returns confirmation of each keypair created and timings and details of the merkle tree. Data for each W-OTS are held in a list of classes in data (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree is an inverted list of lists starting with the base leaves, with a list for each layer of hashes to the root.
