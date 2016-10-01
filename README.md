@@ -10,16 +10,19 @@ Lamport one time signature scheme creates 256 pairs of 256 bit private keys (in 
 <b>Usage:</b>
 
 To create lamport-diffie key pairs:
+
   <b>priv, pub = random_lkey()</b>
   
 Returns lists of tuples containing 256 pairs of private keys and corresponding public keys.
 
 To sign a message:
+
   <b>sig = sign_lkey(priv, message)</b>
   
 Returns the signature which is a list of 256 256bit strings (50% of the private key).
 
 To verify a signature:
+
   <b>verify_lkey(sig, message, pub)</b>
   
 Returns true or false.
@@ -32,16 +35,19 @@ Based upon the initial scheme. Reduces key sizes and signatures significantly bu
 <b>Usage:</b> 
 
 To create W-OTS key pairs:
+
   <b>priv, pub = random_wkey()</b>
   
 Returns lists of 32 256 bit private keys and corresponding public keys.
 
 To sign a message:
+
   <b>sig = sign_lkey(priv, message)</b>
   
 Returns the signature which is a list of 32 256bit hashes.
 
 To verify a signature:
+
 <b>verify_lkey(sig, message, pub)</b>
   
 Evaluates whether message signature is valid by creating the public key from the signature. Returns true or false.
