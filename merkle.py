@@ -164,8 +164,9 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
     for y in range(signatures):
         data[y].merkle_root = a.root
         data[y].merkle_path = a.auth_lists[y]
+        data[y].merkle_obj = a
 
-    return data, a                 #array of wots classes full of data.. and a class full of merkle
+    return data                 #array of wots classes full of data.. and a class full of merkle
 
 
 def random_ldmss(signatures=4):
@@ -184,14 +185,16 @@ def random_ldmss(signatures=4):
     for y in range(signatures):
         data[y].merkle_root = a.root
         data[y].merkle_path = a.auth_lists[y]
+        data[y].merkle_obj = a
 
-    return data, a                 
+    return data                
 
 
 
 
 class LDOTS():
     def __init__(self, index=0):
+        self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
         self.state = 0
@@ -215,6 +218,7 @@ class LDOTS():
 
 class WOTS():
     def __init__(self, index=0):
+        self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
         self.state = 0
