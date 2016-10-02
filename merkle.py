@@ -200,6 +200,10 @@ def random_ldmss(signatures=4):
 
 class LDOTS():
     def __init__(self, index=0):
+        self.merkle_root = ''
+        self.merkle_auths = []
+        self.state = 0
+        self.type = 'LDOTS'
         self.index = index
         self.concatpub = ""
         print 'New LD keypair generation ', str(self.index)
@@ -219,6 +223,10 @@ class LDOTS():
 
 class WOTS():
     def __init__(self, index=0):
+        self.merkle_root = ''
+        self.merkle_auths = []
+        self.state = 0
+        self.type = 'WOTS'
         self.index = index
         self.concatpub = ""
         print 'New W-OTS keypair generation ', str(self.index)
