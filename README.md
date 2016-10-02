@@ -63,11 +63,13 @@ Creating more than one set of W-OTS keypairs and hashing the concatenated 32 256
 
 To create a batch of W-OTS keypairs and link them to a merkle tree:
 
-<b> data, merkle = random_wmss(20)</b>
+<b> data = random_wmss(20)</b>
 
 
 To create n LD-OTS keypairs and link them to a merkle tree:
 
-<b> data, merkle = random_ldmss(n) </b>
+<b> data = random_ldmss(n) </b>
 
-Returns confirmation of each of 20/n keypairs created and timings and details of the merkle tree. Data for each W-OTS keypair are held in a list containing classes with data accessible (e.g. data[0].pubhash, data[0].concatpub, data[0].pub, data[0].priv). The merkle tree class is returned allowing similar access to associated data (e.g. merkle.root, merkle.base, merkle.height, merkle.num_leaves, merkle.tree.  
+Returns confirmation of each n keypairs created and timings and details of the merkle tree. Data for each W-OTS/LD-OTS keypair are held in a list containing class objects with data accessible (e.g. data[0].pub (public key), data[0].priv (private key), data[0].concatpub (concatenated public key for pubhash), data[0].pubhash (hash of concatenated public key),data[0].type (type of key..LD or W-OTS), data[0].merkle_root (root hash of tree), data[0].merkle_path (hash authentication path from leaf to root). 
+
+The merkle tree class is returned entirely in data[0].merkle_obj allowing similar access to associated data (e.g. 'data[0].merkle_obj.root') for the following: .root, .base, .height, .num_leaves, .num_branches .tree, .auth_lists. But everything needed to perform a signature with proofs to the merkle root is found in the data[n] class object.  
