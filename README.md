@@ -72,4 +72,6 @@ To create n LD-OTS keypairs and link them to a merkle tree:
 
 Returns confirmation of each n keypairs created and timings and details of the merkle tree. Data for each W-OTS/LD-OTS keypair are held in a list containing class objects with data accessible (e.g. data[0].pub (public key), data[0].priv (private key), data[0].concatpub (concatenated public key for pubhash), data[0].pubhash (hash of concatenated public key),data[0].type (type of key..LD or W-OTS), data[0].merkle_root (root hash of tree), data[0].merkle_path (hash authentication path from leaf to root). 
 
-The merkle tree class is returned entirely in data[0].merkle_obj allowing similar access to associated data (e.g. 'data[0].merkle_obj.root') for the following: .root, .base, .height, .num_leaves, .num_branches .tree, .auth_lists. But everything needed to perform a signature with proofs to the merkle root is found in the data[n] class object.  
+The merkle tree class is returned entirely in data[0].merkle_obj allowing similar access to associated data (e.g. 'data[0].merkle_obj.root') for the following: .root, .base, .height, .num_leaves, .num_branches .tree, .auth_lists. But everything needed to perform a signature with proofs to the merkle root is found in the data[n] class object.
+
+Expect some computation time with larger merkle trees auth proofs. On a macbook pro: 4 signatures 0.003s, 32 s, 64 1.3s, 128 10.3s, 256 84.7s etc..
