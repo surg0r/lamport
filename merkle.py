@@ -14,6 +14,7 @@ from bitcoin import sha256
 from bitcoin import random_key
 from binascii import unhexlify
 import time
+import random
 
 
 
@@ -178,6 +179,10 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
         pubhashes.append(data[i].pubhash)
 
     a = Merkle(pub=pubhashes)
+
+    for y in range(signatures):
+        data[y].merkle_root = a.root
+
     return data, a                 #array of wots classes full of data.. and a class full of merkle
 
 
@@ -193,6 +198,10 @@ def random_ldmss(signatures=4):
         pubhashes.append(data[i].pubhash)
 
     a = Merkle(pub=pubhashes)
+
+    for y in range(signatures):
+        data[y].merkle_root = a.root
+
     return data, a                 
 
 
@@ -256,10 +265,95 @@ class Merkle():
         return
     else:
         self.create_tree()
+        self.route_proof()
 
 
- def route_proof(self):
-    return 
+ def route_proof(self):             #order or hashing matters..
+
+    self.auth_lists = []
+    
+
+    #leaf = self.tree[0][0]
+
+    print 'calculating proofs:'
+    print 'merkle height ',self.height 
+
+    for y in range(self.num_leaves):
+        auth_route = []
+        print 'leaf ', str(y)
+        leaf = self.tree[0][y]
+        for x in range(self.height):      
+            print 'starting merkle traversal',str(x)    
+            if self.tree[x] == self.root:       #we are at top of tree..
+                auth_route.append(self.root)    #append proof..
+                print 'appending merkle root'
+                self.auth_lists.append(auth_route)
+            else:
+                nodes = self.tree[x]
+                nodes_above = self.tree[x+1]      #if nodes above = 1 then we are almost done for this iteration
+        
+           # if len(nodes_above) == 1:         #if node layer n=1 then we are in penultimate iteration..
+               
+            #    print 'penultimate node layer'
+             #   print numlist(nodes)
+              #  print leaf
+               # 
+                #for node in nodes:
+                 #   if leaf != node:
+
+              #          test = sha256(leaf+node)
+               #         test2 = sha256(node+leaf)
+               #         if test == self.root:
+               #             auth_route.append((leaf, node))
+
+               #         elif test2 == self.root:
+               #             auth_route.append((node,leaf))
+               #         else:
+               #             auth_route.append('FAILED CHECKSUM')
+                            #return False
+
+
+            #else:
+            
+                print numlist(nodes)
+                print leaf
+                
+                for node in nodes:          #for all node layers between base and root and penultimate
+                    if leaf != node:
+                        for nodehash in nodes_above:
+
+                            test = sha256(leaf+node)
+                            test2 = sha256(node+leaf)
+
+                            if test == nodehash:
+                                print 'match on layer ',str(x)
+                                #print 'match leaf ', leaf 
+                                #print 'node ', node, '=', nodehash
+                                auth_route.append((leaf, node))
+                                leaf = nodehash
+
+                            elif test2 == nodehash:
+                                print 'match on layer ',str(x)
+                                #print 'node', node ,'and leaf', leaf, '=', nodehash
+                                auth_route.append((node,leaf))
+                                leaf = nodehash
+                            else:
+                                pass
+            #self.auth_lists.append(auth_route)                            
+
+    
+
+
+
+
+
+
+
+
+        #data.append()
+
+    #self.merkle_auths = auth_lists
+    return True
 
  def create_tree(self):
 
