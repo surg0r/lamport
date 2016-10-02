@@ -25,31 +25,23 @@ def numlist(array):
 
 def random_wkey(w=8):      #create random W-OTS keypair
     # Use F = SHA256/SHA512 and G = SHA256/512
-
     if w > 16:
         w = 16      #too many hash computations to make this sensible.  16 = 3.75s, 8 = 0.01s 1024 bytes..
-
     priv = []
     pub = []
-
     start_time = time.time()
-
     for x in range(256/w):
         a = random_key()
         priv.append(a)
-
         for y in range(2**w-1):              #F
             a = sha256(a)
-
         pub.append(sha256(a))               #G (just in case we have a different f from g).
 
     elapsed_time = time.time() - start_time
     print elapsed_time
-    
     return priv, pub    
 
 def temp():
-
     priv = random_key()
     pub = priv
     for x in range(256):
@@ -61,29 +53,22 @@ def temp():
 def sign_wkey(priv, message):      #only works with 8 at present. havent separated the 'g' component yet.
 
     signature = []
-
     bin_msg = unhexlify(sha256(message))
 
     for y in range(len(priv)):
-
         s = priv[y]    
-
         for x in range(256-ord(bin_msg[y:y+1])):
             s = sha256(s)
         signature.append(s)
-
     return signature
 
 def verify_wkey(signature, message, pub):
 
     verify = []
-
     bin_msg = unhexlify(sha256(message))
     
     for x in range(len(signature)):
-
         a = signature[x]
-    
         for z in range(ord(bin_msg[x:x+1])-1):      #f is all but last hash..
                 a=sha256(a)
         a = sha256(a)                               #g is the final hash, separate so can be changed..
@@ -98,7 +83,6 @@ def verify_wkey(signature, message, pub):
 def sign_lkey(priv, message):       #perform lamport signature
     
     signature = [] 
-
     bin_lmsg = unhexlify(sha256(message))
 
     z = 0
@@ -124,9 +108,7 @@ def sign_lkey(priv, message):       #perform lamport signature
 def verify_lkey(signature, message, pub ):  #verify lamport signature
 
     bin_lmsg = unhexlify(sha256(message))
-
     verify = []
-
     z = 0
 
     for x in range (len(bin_lmsg)):
@@ -163,7 +145,6 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
         priv.append((a,b))
         pub.append((sha256(a),sha256(b)))
 
-
     return priv, pub
 
 
@@ -182,6 +163,7 @@ def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
 
     for y in range(signatures):
         data[y].merkle_root = a.root
+        data[y].merkle_path = a.auth_lists[y]
 
     return data, a                 #array of wots classes full of data.. and a class full of merkle
 
@@ -201,6 +183,7 @@ def random_ldmss(signatures=4):
 
     for y in range(signatures):
         data[y].merkle_root = a.root
+        data[y].merkle_path = a.auth_lists[y]
 
     return data, a                 
 
@@ -210,7 +193,7 @@ def random_ldmss(signatures=4):
 class LDOTS():
     def __init__(self, index=0):
         self.merkle_root = ''
-        self.merkle_auths = []
+        self.merkle_path = []
         self.state = 0
         self.type = 'LDOTS'
         self.index = index
@@ -233,7 +216,7 @@ class LDOTS():
 class WOTS():
     def __init__(self, index=0):
         self.merkle_root = ''
-        self.merkle_auths = []
+        self.merkle_path = []
         self.state = 0
         self.type = 'WOTS'
         self.index = index
@@ -268,92 +251,39 @@ class Merkle():
         self.route_proof()
 
 
- def route_proof(self):             #order or hashing matters..
-
+ def route_proof(self):             #need to add in error detection..
+    start_time = time.time()
     self.auth_lists = []
     
-
-    #leaf = self.tree[0][0]
-
-    print 'calculating proofs:'
-    print 'merkle height ',self.height 
+    print 'Calculating proofs: tree height ',str(self.height), ',',str(self.num_leaves) ,' leaves'
 
     for y in range(self.num_leaves):
         auth_route = []
-        print 'leaf ', str(y)
         leaf = self.tree[0][y]
         for x in range(self.height):      
-            print 'starting merkle traversal',str(x)    
-            if self.tree[x] == self.root:       #we are at top of tree..
-                auth_route.append(self.root)    #append proof..
-                print 'appending merkle root'
-                self.auth_lists.append(auth_route)
+            if len(self.tree[x])==1:    
+                if self.tree[x] == self.root:       
+                    auth_route.append(self.root)    
+                    self.auth_lists.append(auth_route)
+                else:
+                    print 'Merkle route calculation failed @ root'   
             else:
                 nodes = self.tree[x]
-                nodes_above = self.tree[x+1]      #if nodes above = 1 then we are almost done for this iteration
-        
-           # if len(nodes_above) == 1:         #if node layer n=1 then we are in penultimate iteration..
-               
-            #    print 'penultimate node layer'
-             #   print numlist(nodes)
-              #  print leaf
-               # 
-                #for node in nodes:
-                 #   if leaf != node:
-
-              #          test = sha256(leaf+node)
-               #         test2 = sha256(node+leaf)
-               #         if test == self.root:
-               #             auth_route.append((leaf, node))
-
-               #         elif test2 == self.root:
-               #             auth_route.append((node,leaf))
-               #         else:
-               #             auth_route.append('FAILED CHECKSUM')
-                            #return False
-
-
-            #else:
-            
-                print numlist(nodes)
-                print leaf
-                
-                for node in nodes:          #for all node layers between base and root and penultimate
+                nodes_above = self.tree[x+1]      
+                for node in nodes:          
                     if leaf != node:
                         for nodehash in nodes_above:
-
-                            test = sha256(leaf+node)
-                            test2 = sha256(node+leaf)
-
-                            if test == nodehash:
-                                print 'match on layer ',str(x)
-                                #print 'match leaf ', leaf 
-                                #print 'node ', node, '=', nodehash
-                                auth_route.append((leaf, node))
+                            if sha256(leaf+node) == nodehash:
+                                auth_route.append((leaf, node))         #binary hash is ordered
                                 leaf = nodehash
-
-                            elif test2 == nodehash:
-                                print 'match on layer ',str(x)
-                                #print 'node', node ,'and leaf', leaf, '=', nodehash
+                            elif sha256(node+leaf) == nodehash:
                                 auth_route.append((node,leaf))
                                 leaf = nodehash
                             else:
                                 pass
-            #self.auth_lists.append(auth_route)                            
-
-    
-
-
-
-
-
-
-
-
-        #data.append()
-
-    #self.merkle_auths = auth_lists
-    return True
+    elapsed_time = time.time() - start_time
+    print elapsed_time   
+    return
 
  def create_tree(self):
 
@@ -384,7 +314,6 @@ class Merkle():
     for x in range(num_branches):       #iterate through each layer of the merkle tree starting with the base layer
         temp_array = []
         cycles = len(hashlayer)%2 + len(hashlayer)/2
-        #print 'branch cycle: ', str(x), ' - number of hashes / leaves:', self.num_leaves, ' - (pairs + modulo) per layer:', cycles
         y = 0
         for x in range(cycles):
             if y+1 == len(hashlayer):
