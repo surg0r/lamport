@@ -14,7 +14,7 @@ from bitcoin import sha256
 from bitcoin import random_key
 from binascii import unhexlify
 import time
-
+import random
 
 
 
@@ -146,6 +146,68 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
         pub.append((sha256(a),sha256(b)))
 
     return priv, pub
+
+def verify_mss(sig,message,data,ots_pubkey=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
+
+    if not sig:
+        return False
+
+    if not message:
+        return False
+
+    if ots_pubkey > len(data):
+        return False
+
+    if data[0].type == 'WOTS':
+        return verify_wkey(sig, message, data[ots_pubkey].pub)
+    elif data[0].type == 'LDOTS':
+        return verify_lkey(sig, message, data[ots_pubkey].pub)
+
+def verify_root(pub, merkle_root, merkle_path):
+
+    if not pub:
+        return False
+    if not merkle_root:
+        return False
+    if not merkle_path:
+        return False
+
+    pubhash = sha256(''.join(pub))
+
+    if pubhash not in merkle_path[0]:
+        print 'hashed public key not in merkle path'
+        return False
+
+    for x in range(len(merkle_path)):
+        if len(merkle_path[x]) == 1:
+            if merkle_path[x] == merkle_root:
+                return True
+            else:
+                print 'root check failed'
+                return False
+        if sha256(merkle_path[x][0]+merkle_path[x][1]) not in merkle_path[x+1]:
+                return False
+                print 'path authentication error'
+
+    return False
+    
+
+def sign_mss(data, message, ots_key=0):
+    
+    if not data:
+        return False
+
+    if not message:
+        return False
+
+    if ots_key > len(data):
+        return False
+
+    if data[0].type == 'WOTS':
+        return sign_wkey(data[ots_key].priv, message)
+    elif data[0].type == 'LDOTS':
+        return sign_lkey(data[ots_key].priv, message)
+
 
 
 def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
