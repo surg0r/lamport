@@ -90,6 +90,6 @@ Returns True or False.
 
 To verify the merkle root can be computed using the public key and merkle path data:
 
-<b> verify_root(pub, merkle_root, merkle_path)
+<b> verify_root(pub, merkle_root, merkle_path)</b>
 
 Returns True or False.
