@@ -75,3 +75,21 @@ Returns confirmation of each n keypairs created and timings and details of the m
 The merkle tree class is returned entirely in data[0].merkle_obj allowing similar access to associated data (e.g. 'data[0].merkle_obj.root') for the following: .root, .base, .height, .num_leaves, .num_branches .tree, .auth_lists. But everything needed to perform a signature with proofs to the merkle root is found in the data[n] class object.
 
 Expect some computation time with larger merkle trees auth proofs. On a macbook pro: 4 signatures 0.003s, 32 s, 64 1.3s, 128 10.3s, 256 84.7s etc..
+
+To sign a message using data from above two functions:
+
+<b> sig = sign_mss(data, 'a message to sign', ots_key)</b>
+
+Creates a signature using the private key from specified ots_key number within the data list. 
+
+To verify a signature:
+
+<b> verify_mss(sig, 'a message to sign', ots_key)</b>
+
+Returns True or False.
+
+To verify the merkle root can be computed using the public key and merkle path data:
+
+<b> verify_root(pub, merkle_root, merkle_path)
+
+Returns True or False.
