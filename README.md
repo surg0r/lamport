@@ -93,3 +93,15 @@ To verify the merkle root can be computed using the public key and merkle path d
 <b> verify_root(pub, merkle_root, merkle_path)</b>
 
 Returns True or False.
+
+<b>Example code</b>
+
+For example the following would create 64 W-OTS keypairs and build a merkle tree, print the merkle root, sign a message from keypair 32 (33rd), then verify that message and confirm the merkle authentication route is true.
+<b>
+  d = random_wmss(64)
+  print d[0].merkle_root
+  sig = sign_mss(d, 'this is probably quantum secure', 32)
+  verify_mss(sig, 'this is probably quantum secure', 32)
+  verify_root(d[32].pub, d[32].merkle_root, d[32].merkle_path)</b>
+ 
+
