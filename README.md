@@ -84,7 +84,7 @@ Creates a signature using the private key from specified ots_key number within t
 
 To verify a signature:
 
-<b> verify_mss(sig, 'a message to sign', data,  ots_key)</b>
+<b> verify_mss(sig, data, 'a message to sign', ots_key)</b>
 
 Returns True or False.
 
@@ -106,7 +106,7 @@ For example the following would create 64 W-OTS keypairs and build a merkle tree
   
   sig = sign_mss(d, 'this is probably quantum secure', 32)
   
-  verify_mss(sig, 'this is probably quantum secure', d, 32)
+  verify_mss(sig, d, 'this is probably quantum secure', 32)
   
   verify_root(d[32].pub, d[32].merkle_root, d[32].merkle_path)</b>
  
