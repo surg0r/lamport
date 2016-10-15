@@ -147,7 +147,7 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
 
     return priv, pub
 
-def verify_mss(sig,message,data,ots_pubkey=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
+def verify_mss(sig, data, message, ots_pubkey=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
 
     if not sig:
         return False
