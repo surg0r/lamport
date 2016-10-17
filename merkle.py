@@ -5,6 +5,9 @@
 # creates winternitz OTS key pairs, signs and verifies a winternitz one time signature. 
 # creates lamport-diffie OTS key pairs, signs and verifies a lamport one time signature.
 #
+# todo: not all merkle auth pairs are needed for verification - only the one not created by hashing. this can be optimised to reduce transaction size 
+# slightly.
+#
 # todo: full implementation of Winternitz+, IETF Hash-Based Signatures draft-mcgrew-hash-sigs-02 LDWM scheme,
 # GMSS and XMSS.
 
@@ -23,7 +26,7 @@ def numlist(array):
         print a,b
     return
 
-def random_wkey(w=8):      #create random W-OTS keypair
+def random_wkey(w=8, verbose=0):      #create random W-OTS keypair
     # Use F = SHA256/SHA512 and G = SHA256/512
     if w > 16:
         w = 16      #too many hash computations to make this sensible.  16 = 3.75s, 8 = 0.01s 1024 bytes..
@@ -38,7 +41,8 @@ def random_wkey(w=8):      #create random W-OTS keypair
         pub.append(sha256(a))               #G (just in case we have a different f from g).
 
     elapsed_time = time.time() - start_time
-    print elapsed_time
+    if verbose == 1:
+        print elapsed_time
     return priv, pub    
 
 def temp():
@@ -69,11 +73,12 @@ def verify_wkey(signature, message, pub):
     
     for x in range(len(signature)):
         a = signature[x]
-        for z in range(ord(bin_msg[x:x+1])-1):      #f is all but last hash..
+                                                    #f is all but last hash..
+        for z in range(ord(bin_msg[x:x+1])):
                 a=sha256(a)
-        a = sha256(a)                               #g is the final hash, separate so can be changed..
+        #a = sha256(a)                               #g is the final hash, separate so can be changed..
         verify.append(a)
-        
+  
     if pub != verify:
         return False
 
@@ -147,7 +152,7 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
 
     return priv, pub
 
-def verify_mss(sig, data, message, ots_pubkey=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
+def verify_mss(sig, data, message, ots_key=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
 
     if not sig:
         return False
@@ -155,13 +160,13 @@ def verify_mss(sig, data, message, ots_pubkey=0):       #verifies that the sig i
     if not message:
         return False
 
-    if ots_pubkey > len(data):
-        return False
+    if ots_key > len(data)-1:
+        raise Exception('OTS key higher than available signatures')
 
     if data[0].type == 'WOTS':
-        return verify_wkey(sig, message, data[ots_pubkey].pub)
+        return verify_wkey(sig, message, data[ots_key].pub)
     elif data[0].type == 'LDOTS':
-        return verify_lkey(sig, message, data[ots_pubkey].pub)
+        return verify_lkey(sig, message, data[ots_key].pub)
 
 def verify_root(pub, merkle_root, merkle_path):
 
@@ -180,7 +185,7 @@ def verify_root(pub, merkle_root, merkle_path):
 
     for x in range(len(merkle_path)):
         if len(merkle_path[x]) == 1:
-            if merkle_path[x] == merkle_root:
+            if ''.join(merkle_path[x]) == merkle_root:
                 return True
             else:
                 print 'root check failed'
@@ -200,7 +205,8 @@ def sign_mss(data, message, ots_key=0):
     if not message:
         return False
 
-    if ots_key > len(data):
+    if ots_key > len(data)-1:
+        raise Exception('OTS key number greater than available signatures')
         return False
 
     if data[0].type == 'WOTS':
@@ -210,42 +216,42 @@ def sign_mss(data, message, ots_key=0):
 
 
 
-def random_wmss(signatures=4):  #create a w-ots mms with multiple signatures..
+def random_wmss(signatures=4, verbose=0):  #create a w-ots mms with multiple signatures..
     
     data = []
     pubhashes = []
 
     for x in range(signatures):
-        data.append(WOTS(x))
+        data.append(WOTS(index=x, verbose=verbose))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
 
-    a = Merkle(pub=pubhashes)
+    a = Merkle(pub=pubhashes,verbose=verbose)
 
     for y in range(signatures):
-        data[y].merkle_root = a.root
+        data[y].merkle_root = ''.join(a.root)
         data[y].merkle_path = a.auth_lists[y]
         data[y].merkle_obj = a
 
     return data                 #array of wots classes full of data.. and a class full of merkle
 
 
-def random_ldmss(signatures=4):
+def random_ldmss(signatures=4, verbose=0):
 
     data = []
     pubhashes = []
 
     for x in range(signatures):
-        data.append(LDOTS(x))
+        data.append(LDOTS(index=x, verbose=verbose))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
 
-    a = Merkle(pub=pubhashes)
+    a = Merkle(pub=pubhashes, verbose=verbose)
 
     for y in range(signatures):
-        data[y].merkle_root = a.root
+        data[y].merkle_root = ''.join(a.root)
         data[y].merkle_path = a.auth_lists[y]
         data[y].merkle_obj = a
 
@@ -255,7 +261,7 @@ def random_ldmss(signatures=4):
 
 
 class LDOTS():
-    def __init__(self, index=0):
+    def __init__(self, index=0,verbose=0):
         self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
@@ -263,7 +269,8 @@ class LDOTS():
         self.type = 'LDOTS'
         self.index = index
         self.concatpub = ""
-        print 'New LD keypair generation ', str(self.index)
+        if verbose == 1:
+            print 'New LD keypair generation ', str(self.index)
         self.priv, self.pub = random_lkey()
         
         self.publist = [i for sub in self.pub for i in sub]    #convert list of tuples to list to allow cat.    
@@ -279,7 +286,7 @@ class LDOTS():
         return
 
 class WOTS():
-    def __init__(self, index=0):
+    def __init__(self, index=0, verbose=0):
         self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
@@ -287,8 +294,9 @@ class WOTS():
         self.type = 'WOTS'
         self.index = index
         self.concatpub = ""
-        print 'New W-OTS keypair generation ', str(self.index)
-        self.priv, self.pub = random_wkey()
+        if verbose == 1:
+            print 'New W-OTS keypair generation ', str(self.index)
+        self.priv, self.pub = random_wkey(verbose=verbose)
                 
         self.concatpub = ''.join(self.pub)
         self.pubhash = sha256(self.concatpub)
@@ -304,10 +312,11 @@ class WOTS():
 
 class Merkle():
 
- def __init__(self, pub=[],priv=[],signatures=0):
+ def __init__(self, pub=[],priv=[],signatures=0, verbose=0):
     self.base = pub
     self.priv = priv
     self.signatures = len(priv)
+    self.verbose = verbose
     self.tree = []
     self.num_leaves = len(self.base)
     if not self.base:
@@ -321,7 +330,8 @@ class Merkle():
     start_time = time.time()
     self.auth_lists = []
     
-    print 'Calculating proofs: tree height ',str(self.height), ',',str(self.num_leaves) ,' leaves'
+    if self.verbose == 1:
+        print 'Calculating proofs: tree height ',str(self.height), ',',str(self.num_leaves) ,' leaves'
 
     for y in range(self.num_leaves):
         auth_route = []
@@ -348,7 +358,9 @@ class Merkle():
                             else:
                                 pass
     elapsed_time = time.time() - start_time
-    print elapsed_time   
+    if self.verbose ==1:
+        print elapsed_time   
+    
     return
 
  def create_tree(self):
@@ -392,7 +404,8 @@ class Merkle():
         hashlayer = temp_array
     self.root = temp_array
     self.height = len(self.tree)
-    print 'Merkle tree created with '+str(self.num_leaves),' leaves, and '+str(self.num_branches)+' to root.'
+    if self.verbose==1:
+        print 'Merkle tree created with '+str(self.num_leaves),' leaves, and '+str(self.num_branches)+' to root.'
     return self.tree
 
  def check_item(self):
