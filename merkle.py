@@ -4,11 +4,10 @@
 
 # creates winternitz OTS key pairs, signs and verifies a winternitz one time signature. 
 # creates lamport-diffie OTS key pairs, signs and verifies a lamport one time signature.
+# creates winternitz OTS+ key pairs, signs and verifies the OTS.
 #
-# todo: not all merkle auth pairs are needed for verification - only the one not created by hashing. this can be optimised to reduce transaction size 
-# slightly.
-#
-# todo: full implementation of Winternitz+, IETF Hash-Based Signatures draft-mcgrew-hash-sigs-02 LDWM scheme,
+# 
+# todo: IETF Hash-Based Signatures draft-mcgrew-hash-sigs-02 LDWM scheme,
 # GMSS and XMSS.
 
 
@@ -16,8 +15,10 @@ __author__ = 'pete'
 from bitcoin import sha256
 from bitcoin import random_key
 from binascii import unhexlify
+from math import ceil, floor, log
 import time
 import random
+
 
 
 
@@ -25,6 +26,139 @@ def numlist(array):
     for a,b in enumerate(array):
         print a,b
     return
+
+
+# winternitz ots+               #need to generate a seed from PRF to populate sk_1->sk_l1, r and k. Otherwise need the public key and private key to sign..
+
+def fn_k(x,k):
+    return sha256(k+x)
+
+def chain_fn(x,r,i,k):
+    if i == 0:
+        return x
+    else:
+        for y in range(i):
+            x = fn_k(hex(int(x,16)^int(r[y],16)),k)
+    return x
+
+def chain_fn2(x,r,i,k):
+        for y in range(i,15):
+            x = fn_k(hex(int(x,16)^int(r[y],16)),k)
+        return x
+
+
+def random_wpkey(w=16):
+
+    # first calculate l_1 + l_2 = l .. see whitepaper http://theqrl.org/whitepaper/QRL_whitepaper.pdf
+    # if using SHA-256 then m and n = 256
+
+    m = 256
+    l_1 = ceil(m/log(w,2))
+    l_2 = floor(log((l_1*(w-1)),2)/log(w,2)) + 1
+    l = int(l_1+l_2)
+
+    sk = []
+    pub = []
+
+    # next create l+w-1 256 bit secret key fragments..(we will update this to use a PRF instead of random_key)
+    # l n-bits will be private key, remaining w-1 will be r, the randomisation elements for the chaining function
+    # finally generate k the key for the chaining function..
+
+    for x in range(l+w-1):
+        sk.append(random_key())
+
+    priv = sk[:-(w-1)]
+    r = sk[l:]
+
+    k = random_key()
+
+    pub.append((r,k))       #pk_0 = (r,k) ..where r is a list of w-1 randomisation elements
+
+    for sk_ in priv:
+        pub.append(chain_fn(sk_,r,w-1,k))
+
+    return priv, pub
+
+
+def sign_wpkey(priv, message, pub, w=16):            
+
+    m = 256
+    if w==16:
+        l_1 = 64
+        l_2 = 3
+        l = 67
+    else:    
+        l_1 = ceil(m/log(w,2))
+        l_2 = floor(log((l_1*(w-1)),2)/log(w,2)) + 1
+        l = int(l_1+l_2)
+
+    message = sha256(message)       #outputs 256 bit -> 64 hexadecimals. each hex digit is therefore 4 bits..
+
+    s = []
+    checksum = 0
+
+    for x in range(int(l_1)):
+        y = int(message[x],16)
+        s.append(y)
+        checksum += w-1-y
+
+    c = (hex(checksum))[2:]
+
+    if len(c) < 3:
+        c = '0'+c
+
+    for x in range(int(l_2)):
+        y = int(c[x],16)
+        s.append(y)
+
+    signature = []
+
+    for x in range(int(l)):         #merkle.chain_fn(priv[0],pub[0][0],15,pub[0][1])
+        signature.append(chain_fn(priv[x],pub[0][0],s[x],pub[0][1]))
+
+    return signature
+
+def verify_wpkey(signature, message, pub, w=16):
+    m = 256
+    if w==16:
+        l_1 = 64
+        l_2 = 3
+        l = 67
+    else:    
+        l_1 = ceil(m/log(w,2))
+        l_2 = floor(log((l_1*(w-1)),2)/log(w,2)) + 1
+        l = int(l_1+l_2)
+
+    message = sha256(message)
+
+    s = []
+    checksum = 0
+
+    for x in range(int(l_1)):
+        y = int(message[x],16)
+        s.append(y)
+        checksum += w-1-y
+
+    c = (hex(checksum))[2:]
+
+    if len(c) < 3:
+        c = '0'+c
+
+    for x in range(int(l_2)):
+        y = int(c[x],16)
+        s.append(y)
+
+    pub2 = []
+
+    for x in range(int(l)):         #merkle.chain_fn(priv[0],pub[0][0],15,pub[0][1])
+        pub2.append(chain_fn2(signature[x],pub[0][0],s[x],pub[0][1]))
+
+    if pub2 == pub[1:]:
+        return True
+
+    return False
+
+# winternitz ots
 
 def random_wkey(w=8, verbose=0):      #create random W-OTS keypair
     # Use F = SHA256/SHA512 and G = SHA256/512
@@ -84,6 +218,8 @@ def verify_wkey(signature, message, pub):
 
     return True
 
+
+# lamport-diffie ots
 
 def sign_lkey(priv, message):       #perform lamport signature
     
@@ -152,6 +288,8 @@ def random_lkey(numbers=256):      #create random lamport signature scheme keypa
 
     return priv, pub
 
+# merkle signature scheme
+
 def verify_mss(sig, data, message, ots_key=0):       #verifies that the sig is generated from pub..for now need to specify keypair..
 
     if not sig:
@@ -176,6 +314,9 @@ def verify_root(pub, merkle_root, merkle_path):
         return False
     if not merkle_path:
         return False
+
+    if len(pub) == 256:             #then LDOTS, need to add this to correctly concat the pub->pubhash
+        pub = [i for sub in pub for i in sub] 
 
     pubhash = sha256(''.join(pub))
 
@@ -214,46 +355,52 @@ def sign_mss(data, message, ots_key=0):
     elif data[0].type == 'LDOTS':
         return sign_lkey(data[ots_key].priv, message)
 
-
+# winternitz merkle signature scheme 
 
 def random_wmss(signatures=4, verbose=0):  #create a w-ots mms with multiple signatures..
-    
+    begin = time.time()
     data = []
     pubhashes = []
 
     for x in range(signatures):
-        data.append(WOTS(index=x, verbose=verbose))
+        data.append(WOTS(signatures, index=x, verbose=verbose ))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
 
-    a = Merkle(pub=pubhashes,verbose=verbose)
+    a = Merkle(base=pubhashes,verbose=verbose)
 
     for y in range(signatures):
         data[y].merkle_root = ''.join(a.root)
         data[y].merkle_path = a.auth_lists[y]
         data[y].merkle_obj = a
+
+    if verbose == 1:
+        print 'Total MSS time = ',str(time.time()-begin)
 
     return data                 #array of wots classes full of data.. and a class full of merkle
 
+# lamport-diffie merkle signature scheme
 
 def random_ldmss(signatures=4, verbose=0):
-
+    begin = time.time()
     data = []
     pubhashes = []
 
     for x in range(signatures):
-        data.append(LDOTS(index=x, verbose=verbose))
+        data.append(LDOTS(signatures, index=x, verbose=verbose))
 
     for i in range(len(data)):
         pubhashes.append(data[i].pubhash)
 
-    a = Merkle(pub=pubhashes, verbose=verbose)
+    a = Merkle(base=pubhashes, verbose=verbose)
 
     for y in range(signatures):
         data[y].merkle_root = ''.join(a.root)
         data[y].merkle_path = a.auth_lists[y]
         data[y].merkle_obj = a
+    if verbose == 1:
+        print 'Total MSS time = ',str(time.time()-begin)
 
     return data                
 
@@ -261,7 +408,8 @@ def random_ldmss(signatures=4, verbose=0):
 
 
 class LDOTS():
-    def __init__(self, index=0,verbose=0):
+    def __init__(self, signatures, index=0,verbose=0):
+        self.signatures = signatures
         self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
@@ -286,7 +434,8 @@ class LDOTS():
         return
 
 class WOTS():
-    def __init__(self, index=0, verbose=0):
+    def __init__(self, signatures, index=0, verbose=0):
+        self.signatures = signatures
         self.merkle_obj = []
         self.merkle_root = ''
         self.merkle_path = []
@@ -309,13 +458,12 @@ class WOTS():
         print self.pubhash
         return
 
+# merkle tree creation
 
 class Merkle():
 
- def __init__(self, pub=[],priv=[],signatures=0, verbose=0):
-    self.base = pub
-    self.priv = priv
-    self.signatures = len(priv)
+ def __init__(self, base=[], verbose=0):
+    self.base = base
     self.verbose = verbose
     self.tree = []
     self.num_leaves = len(self.base)
