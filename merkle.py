@@ -33,7 +33,7 @@ def random_key():                   #returns a 256 bit hex encoded (64 bytes) ra
     return hexlify(urandom(32))
 
 
-def SEED(n=32):                     #returns a n-byte binary random string
+def SEED(n=48):                     #returns a n-byte binary random string
     return urandom(n)
 
 # pseudo random function generator (PRF) utilising hash-based message authentication code deterministic random bit generation (HMAC_DRBG)
@@ -41,21 +41,70 @@ def SEED(n=32):                     #returns a n-byte binary random string
 
 class HMAC_DRBG():
 
-    def hmac(self):
-        return
+    def __init__(self, entropy, personalisation_string="", security_strength=256):   #entropy should be 1.5X length of strength..384 bits / 48 bytes   
+        self.security_strength=security_strength
+        self.instantiate(entropy, personalisation_string)
 
-    def generate(self):
-        return
+    def hmac(self, key, data):
+        return hmac.new(key, data, hashlib.sha256).digest()
+
+    def generate(self,num_bytes, requested_security_strength=256):
+        if (num_bytes * 8) > 7500:
+            raise RuntimeError ("generate cannot generate more than 7500 bits in a single call.")
+
+        if requested_security_strength > self.security_strength:
+            raise RuntimeError ("requested_security_strength exceeds this instance's security_strength (%d)" % self.security_strength)
+
+        if self.reseed_counter >= 10000:
+            return None
+
+        temp = b""
+
+        while len (temp) < num_bytes:
+            self.V = self.hmac(self.K, self.V)
+            temp += self.V
+
+        self.update(None)
+        self.reseed_counter += 1
+
+        return temp[:num_bytes]
 
     def reseed(self):
+        self.update(entropy)
+        self.reseed_counter = 1
         return
 
-    def instantiate(self):
+    def instantiate(self, entropy, personalisation_string=""):
+        seed_material = entropy+personalisation_string
+        
+        self.K = b"\x00" * 32
+        self.V = b"\x01" * 32
+
+        self.update(seed_material)
+        self.reseed_counter = 1
         return
 
-    def update(self):
+    def update(self, seed_material=None):
+        self.K = self.hmac (self.K, self.V + b"\x00" + (b"" if seed_material is None else seed_material))
+        self.V = self.hmac (self.K, self.V)
+
+        if seed_material is not None:
+            self.K = self.hmac (self.K, self.V + b"\x01" + seed_material)
+            self.V = self.hmac (self.K, self.V)
+
         return    
 
+
+# PRF overlay functions
+
+def GEN(SEED,i):                #generate a 256 bit PRF hexadecimal string at position i. Takes >= 48 byte SEED..
+    if i < 1:
+        print 'i must be greater than 1'
+        return
+    z = HMAC_DRBG(SEED)
+    for x in range(i):
+        y = z.generate(32)
+    return hexlify(y)
 
 # xmss python implementation - need to integrate PRF from SEED and key to ge
 
