@@ -7,23 +7,54 @@
 # creates winternitz OTS+ key pairs, signs and verifies the OTS.
 #
 # creates XMSS trees with W-OTS+ 
- 
-
-
 
 __author__ = 'pete'
-from bitcoin import sha256
-from bitcoin import random_key
-from binascii import unhexlify
+
+import hmac
+import hashlib
+from binascii import unhexlify, hexlify
 from math import ceil, floor, log
 import time
-import random
-
+from os import urandom
 
 def numlist(array):
     for a,b in enumerate(array):
         print a,b
     return
+
+# sha256 short form
+
+def sha256(message):
+    return hashlib.sha256(message).hexdigest()
+
+# sample entropy from OS for true random numbers such as seeds and private keys
+
+def random_key():                   #returns a 256 bit hex encoded (64 bytes) random number
+    return hexlify(urandom(32))
+
+
+def SEED(n=32):                     #returns a n-byte binary random string
+    return urandom(n)
+
+# pseudo random function generator (PRF) utilising hash-based message authentication code deterministic random bit generation (HMAC_DRBG)
+# k, v = key and value..
+
+class HMAC_DRBG():
+
+    def hmac(self):
+        return
+
+    def generate(self):
+        return
+
+    def reseed(self):
+        return
+
+    def instantiate(self):
+        return
+
+    def update(self):
+        return    
 
 
 # xmss python implementation - need to integrate PRF from SEED and key to ge
@@ -73,7 +104,6 @@ class XMSS():
         s = self.sign(msg, i)
         auth_route, i_bms = xmss_route(self.x_bms, self.tree, i)
         return i, s, auth_route, i_bms, self.pk(i), self.PK     #SIG
-
 
     def VERIFY(self, msg, SIG):
         return xmss_verify(msg, SIG)
