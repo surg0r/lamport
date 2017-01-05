@@ -6,9 +6,14 @@
 # creates lamport-diffie OTS key pairs, signs and verifies a lamport one time signature.
 # creates winternitz OTS+ key pairs, signs and verifies the OTS.
 #
-# creates XMSS trees with W-OTS+
+# creates XMSS trees with W-OTS+ using PRF (hmac_drbg)
 
 # TODO: think about how can keep strings in hex..but need to go through and edit code such that we are passing sha256 binary strings rather than hex to avoid problems with specs..
+# generate public and private seeds from single SEED
+# get a large words file from github (mymonero i.e) to code the seed for memorable key..
+# run seeds through hmac_drbg to generate a multiple seeds for each private key from which to derive sk elements + r,k
+# each private key has 67 sk elements + w-1 +k = 83 -> 339968 keys to generate for a 4096 xmss tree!
+# so we take the private key seed and generate 4096 seeds with hmac_drbg, then generate 83 sk elements from each seed..
 
 __author__ = 'pete'
 
@@ -141,6 +146,8 @@ def GEN_range(SEED, start_i, end_i, l=32):      #returns start -> end iteration 
 class XMSS():
     def __init__(self, signatures, public_SEED=None, private_SEED=None):
         self.index = 0
+        if signatures > 4986:               #after this we need to update seed for PRF..
+            signatures = 4986
         self.signatures = signatures        #number of OTS keypairs in tree to generate: n=512 2.7s, n=1024 5.6s, n=2048 11.3s, n=4096 22.1s, n=8192 44.4s, n=16384 89.2s
 
         # use supplied 48 byte SEEDS, else create randomly from os
@@ -152,7 +159,7 @@ class XMSS():
         self.public_SEED = public_SEED
 
         # create the tree
-        self.tree, self.x_bms, self.l_bms, self.privs, self.pubs = xmss_tree(signatures)
+        self.tree, self.x_bms, self.l_bms, self.privs, self.pubs = xmss_tree(n=signatures, private_SEED=self.private_SEED, public_SEED=self.public_SEED)
         self.root = ''.join(self.tree[-1])
 
         self.PK = [self.root, self.x_bms, self.l_bms]
@@ -162,7 +169,7 @@ class XMSS():
         # derived from SEED
         self.PK_short = [self.root,hexlify(self.public_SEED)]
         self.catPK_short = self.root+hexlify(self.public_SEED)
-        self.address_short = 'Q'+sha256(self.catPK)+sha256(sha256(self.catPK))[:4]
+        self.address_short = 'Q'+sha256(self.catPK_short)+sha256(sha256(self.catPK_short))[:4]
 
     def index(self):            #return next OTS key to sign with
         return self.index
@@ -176,25 +183,36 @@ class XMSS():
     def pk(self, i=0):          #return OTS public key at position i
         return self.pubs[i]
 
-    def auth_route(self, i=0):                                  #calculate auth route for keypair i
+    def auth_route(self, i=0):                                      #calculate auth route for keypair i
         return xmss_route(self.x_bms, self.tree, i)
 
     def verify_auth(self, auth_route, i_bms, i=0):                  #verify auth route using pk's 
         return verify_auth(auth_route, i_bms, self.pk(i), self.PK)
 
-    def sign(self, msg, i=0):
-        return sign_wpkey(self.privs[i], msg, self.pubs[i])     #sign with OTS private key at position i
+    def verify_auth_SEED(self, auth_route, i_bms, i=0):                             #verify auth route using ots pk and shorter PK {root, public_SEED}
+        return verify_auth_SEED(auth_route, i_bms, self.pk(i), self.PK_short)
 
-    def verify(self, signature, msg, i=0):                      #verify OTS signature
+    def sign(self, msg, i=0):
+        return sign_wpkey(self.privs[i], msg, self.pubs[i])         #sign with OTS private key at position i
+
+    def verify(self, signature, msg, i=0):                          #verify OTS signature
         return verify_wpkey(signature, msg, self.pubs[i])   
 
     def SIGN(self, msg, i=0):
         s = self.sign(msg, i)
         auth_route, i_bms = xmss_route(self.x_bms, self.tree, i)
-        return i, s, auth_route, i_bms, self.pk(i), self.PK     #SIG
+        return i, s, auth_route, i_bms, self.pk(i), self.PK         #SIG
+
+    def SIGN_short(self, msg, i=0):
+        s = self.sign(msg, i)
+        auth_route, i_bms = xmss_route(self.x_bms, self.tree, i)
+        return i, s, auth_route, i_bms, self.pk(i), self.PK_short   #shorter SIG due to SEED rather than bitmasks
 
     def VERIFY(self, msg, SIG):
         return xmss_verify(msg, SIG)
+
+    def VERIFY_short(self, msg, SIG):
+        return xmss_verify_short(msg, SIG)
 
 def xmss_tree(n, private_SEED, public_SEED):
     #no.leaves = 2^h
@@ -205,12 +223,15 @@ def xmss_tree(n, private_SEED, public_SEED):
     leafs = []
     pubs = []
     privs = []
-    x_bms = []
 
-    # for random key generation: public_SEED: 14 = l_bm,  
+    # for random key generation: public_SEED: 14 = l_bm, 2n-2 - 2n+h = x_bm (see comment below)
 
+    rand_keys = GEN_range(public_SEED, 1, 14+2*n+int(h), 32)
 
-    l_bms = l_bm()
+    l_bms = rand_keys[:14]
+    x_bms = rand_keys[14:]
+    
+    #l_bms = l_bm()
 
     for x in range(n):
         priv, pub = random_wpkey()
@@ -219,25 +240,24 @@ def xmss_tree(n, private_SEED, public_SEED):
         pubs.append(pub)
         privs.append(priv)
         
-    # create xmss tree with 2^n leaves, need 2 bitmasks per node (excluding layer 0), therefore for a perfect binary tree n_bm = 2*n_leaves-1
-    # for odd trees n_bm <= 2*n_leaves+log2(n_leaves-1)
+    # create xmss tree with 2^n leaves, need 2 bitmasks per parent node (excluding layer 0), therefore for a perfect binary tree total nodes = 2*n_leaves-1
+    # Given even an odd number we just create a bm for each node but dont use it for ease (the extra moves up to just below root) n_bm = 2*n-2 - 2n+h 
 
     xmss_array = []
     xmss_array.append(leafs)
     
+    p=0
     for x in range(int(h)):
         next_layer = []
         i = len(xmss_array[x])%2 + len(xmss_array[x])/2
         z=0
         for y in range(i):
-            if len(xmss_array[x])== z+1:
+            if len(xmss_array[x])== z+1:                #only one left, therefore odd leaf, just add to next layer until below the root
                 next_layer.append(xmss_array[x][z])
+                p+=1
             else:
-                bm_l = random_key()
-                x_bms.append(bm_l)
-                bm_r = random_key()
-                x_bms.append(bm_r) 
-                next_layer.append(sha256(hex(int(xmss_array[x][z],16)^int(bm_l,16))[2:-1]+hex(int(xmss_array[x][z+1],16)^int(bm_r,16))[2:-1]))
+                next_layer.append(sha256(hex(int(xmss_array[x][z],16)^int(x_bms[p],16))[2:-1]+hex(int(xmss_array[x][z+1],16)^int(x_bms[p+1],16))[2:-1]))
+                p+=2
             z+=2 
         xmss_array.append(next_layer)
 
@@ -252,18 +272,28 @@ def xmss_route(x_bms, x_tree, i=0):
         h = len(x_tree)
         leaf = x_tree[0][i]
         for x in range(h):
-            if len(x_tree[x])== 1:
+            
+            if len(x_tree[x])== 1:                      #must be at root layer
                 if node == ''.join(x_tree[x]):
                     auth_route.append(''.join(x_tree[x]))
                 else:
-                    print 'Failed'
+                    print 'Failed..root'
+                    return
+
+            elif i == len(x_tree[x])-1 and leaf in x_tree[x+1]:            #for an odd node it goes up a level each time until it branches..
+                i = x_tree[x+1].index(leaf)
+                n = nodehash_list.index(leaf)
+                nodehash_list[n] = None                                    #stops at first duplicate in list..need next so wipe..
+
             else:
                 n = nodehash_list.index(leaf)           #position in the list == bitmask..
                 if i % 2 == 0:          #left leaf, go right..
+                   # print 'left'
                     node = sha256(hex(int(leaf,16)^int(x_bms[n],16))[2:-1]+hex(int(nodehash_list[n+1],16)^int(x_bms[n+1],16))[2:-1])
                     pair = nodehash_list[n+1]
                     auth_route.append(pair)
                     i_bms.append(('L',n,n+1))
+
 
                 elif i % 2 == 1:          #right leaf go left..
                     node = sha256(hex(int(nodehash_list[n-1],16)^int(x_bms[n-1],16))[2:-1]+hex(int(leaf,16)^int(x_bms[n],16))[2:-1])
@@ -273,7 +303,7 @@ def xmss_route(x_bms, x_tree, i=0):
 
                 try: x_tree[x+1].index(node)     #confirm node matches a hash in next layer up?
                 except:    
-                        print 'Failed'
+                        print 'Failed at height', str(x) 
                         return
                 leaf = node
                 i = x_tree[x+1].index(leaf)
@@ -305,6 +335,20 @@ def verify_auth(auth_route, i_bms, pub, PK):
         return True
     return False
 
+# same but using the shorter PK which is {root, hex(public_SEED)} to reconstitute the long PK with bitmasks then call above..
+
+def verify_auth_SEED(auth_route, i_bms, pub, PK):
+
+    root = PK[0]
+    public_SEED = unhexlify(PK[1])
+
+    rand_keys = GEN_range(public_SEED, 1, 14+i_bms[-1][-1]+1, 32)   #i_bms[-1][-1] is the last bitmask in the tree. +1 because it counts from 0.
+
+    PK[1] = rand_keys[14:]           #x_bms
+    PK.append(rand_keys[:14])        #l_bms
+
+    return verify_auth(auth_route, i_bms, pub, PK)
+
 # verify an XMSS signature: {i, s, auth_route, i_bms, pk(i), PK(root, x_bms, l_bms)}
 # SIG is a list compossed of: i, s, auth_route, i_bms, pk[i], PK
 
@@ -314,6 +358,18 @@ def xmss_verify(msg, SIG):
             return False
 
     if verify_auth(SIG[2], SIG[3], SIG[4], SIG[5])== False:
+            return False
+
+    return True
+
+# same function but verifies using shorter signature where PK: {root, hex(public_SEED)}
+
+def xmss_verify_short(msg, SIG):
+
+    if verify_wpkey(SIG[1], msg, SIG[4]) == False:
+            return False
+
+    if verify_auth_SEED(SIG[2], SIG[3], SIG[4], SIG[5])== False:
             return False
 
     return True
