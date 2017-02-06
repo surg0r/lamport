@@ -9,10 +9,11 @@
 # creates XMSS trees with W-OTS+ using PRF (hmac_drbg)
 
 # TODO: think about how can keep strings in hex..but need to go through and edit code such that we are passing sha256 binary strings rather than hex to avoid problems with specs..
-# get a large words file from github (mymonero i.e) to code the seed for memorable key..
+# look at winternitz-ots fn_k to see if we need to pad it..
 
 __author__ = 'pete'
 
+from words import wordlist  #4096 unique word list for mnemonic SEED retrieval..
 import hmac
 import hashlib
 from binascii import unhexlify, hexlify
@@ -20,11 +21,19 @@ from math import ceil, floor, log
 import time
 from os import urandom
 
+
+# timing runs..
+
 def t(n):
     start_time = time.time()
     z = XMSS(n)
     print str(time.time()-start_time)
     return z
+
+def t2(s, m):
+    start_time = time.time()
+    xmss_verify(m, s)
+    print str(time.time()-start_time)
 
 
 def numlist(array):
@@ -117,7 +126,7 @@ def GEN(SEED,i,l=32):                #generates l: 256 bit PRF hexadecimal strin
     z = HMAC_DRBG(SEED)
     for x in range(i):
         y = z.generate(l)
-    return hexlify(y)
+    return y
 
 def GEN_range(SEED, start_i, end_i, l=32):      #returns start -> end iteration of hex PRF (inclusive at both ends)
     if start_i < 1:
@@ -144,6 +153,41 @@ def new_keys(seed=None, n=9999):                         #four digit pin to sepa
     public_SEED = GEN(seed,n,l=48)
     return seed, public_SEED, private_SEED
 
+# 48 byte SEED converted to a backup 32 word mnemonic wordlist to allow backup retrieval of keys and addresses.
+# SEED parsed 12 bits at a time and a word looked up from a dictionary with 4096 unique words in it..
+# another approach would be a hexseed and QR code or BIP38 style encryption of the SEED with a passphrase..
+
+# mnemonic back to SEED
+
+def mnemonic_to_seed(mnemonic):                     #takes a string..could use type or isinstance here..must be space not comma delimited..
+
+    words = mnemonic.lower().split()
+    if len(words) != 32:
+        print 'ERROR: mnemonic is not 32 words in length..'
+        return False
+    SEED = ''
+    y=0
+    for x in range(16):
+        n = format(wordlist.index(words[y]),'012b')+format(wordlist.index(words[y+1]),'012b')
+        SEED+=chr(int(n[:8],2))+chr(int(n[8:16],2))+chr(int(n[16:],2))
+        y+=2
+    return SEED
+
+# SEED to mnemonic
+
+def seed_to_mnemonic(SEED):
+    if len(SEED) != 48:
+         print 'ERROR: SEED is not 48 bytes in length..'
+         return False
+    words = []
+    y=0
+    for x in range(16):
+            three_bytes = format(ord(SEED[y]),'08b')+format(ord(SEED[y+1]),'08b')+format(ord(SEED[y+2]),'08b')
+            words.append(wordlist[int(three_bytes[:12],2)])
+            words.append(wordlist[int(three_bytes[12:],2)])
+            y+=3
+    return ' '.join(words)
+
 # xmss python implementation 
 
 # An XMSS private key contains N = 2^h WOTS+ private keys, the leaf index idx of the next WOTS+ private key that has not yet been used
@@ -151,19 +195,24 @@ def new_keys(seed=None, n=9999):                         #four digit pin to sepa
 
 # The XMSS public key PK consists of the root of the binary hash tree and the bitmasks from xmss and l-tree.
 
-# a class which creates an xmss wrapper.
+# a class which creates an xmss wrapper. allows stateful signing from an xmss tree of signatures. 
 
 class XMSS():
     def __init__(self, signatures, SEED=None):
-        self.type = 'xmss'
+        self.type = 'XMSS'
         self.index = 0
         if signatures > 4986:               #after this we need to update seed for PRF..
             signatures = 4986
         self.signatures = signatures        #number of OTS keypairs in tree to generate: n=512 2.7s, n=1024 5.6s, n=2048 11.3s, n=4096 22.1s, n=8192 44.4s, n=16384 89.2s
-
-        # use supplied 48 byte SEED, else create randomly from os to generate private and public seeds..
+        self.remaining = signatures
         
+        # use supplied 48 byte SEED, else create randomly from os to generate private and public seeds..
         self.SEED, self.public_SEED, self.private_SEED = new_keys(SEED)
+        self.hexpublic_SEED = hexlify(self.public_SEED)
+        self.hexprivate_SEED = hexlify(self.private_SEED)
+        # create the mnemonic..
+        self.hexSEED = hexlify(self.SEED) 
+        self.mnemonic = seed_to_mnemonic(self.SEED)
 
         # create the tree
         self.tree, self.x_bms, self.l_bms, self.privs, self.pubs = xmss_tree(n=signatures, private_SEED=self.private_SEED, public_SEED=self.public_SEED)
@@ -171,12 +220,16 @@ class XMSS():
 
         self.PK = [self.root, self.x_bms, self.l_bms]
         self.catPK = [''.join(self.root),''.join(self.x_bms),''.join(self.l_bms)]
-        self.address = 'Q'+sha256(''.join(self.catPK))+sha256(sha256(''.join(self.catPK)))[:4]
+        self.address_long = 'Q'+sha256(''.join(self.catPK))+sha256(sha256(''.join(self.catPK)))[:4]
 
         # derived from SEED
-        self.PK_short = [self.root,hexlify(self.public_SEED)]
+        self.PK_short = [self.root, hexlify(self.public_SEED)]
         self.catPK_short = self.root+hexlify(self.public_SEED)
-        self.address_short = 'Q'+sha256(self.catPK_short)+sha256(sha256(self.catPK_short))[:4]
+        self.address = 'Q'+sha256(self.catPK_short)+sha256(sha256(self.catPK_short))[:4]
+
+        # data to allow signing of smaller xmss trees/different addresses derived from same SEED..
+        self.addresses = [(0, self.address, self.signatures)]             # position in wallet denoted by first number and address/tree by signatures
+        self.subtrees = [(0, self.signatures, self.tree, self.x_bms, self.PK_short)]      #optimise by only storing length of x_bms..[:x]
 
     def index(self):            #return next OTS key to sign with
         return self.index
@@ -184,10 +237,14 @@ class XMSS():
     def set_index(self,i):      #set the index
         self.index = i
 
-    def sk(self, i=0):          #return OTS private key at position i
+    def sk(self, i=None):          #return OTS private key at position i
+        if i==None:
+            i = self.index
         return self.privs[i]
 
-    def pk(self, i=0):          #return OTS public key at position i
+    def pk(self, i=None):          #return OTS public key at position i
+        if i==None:
+            i = self.index
         return self.pubs[i]
 
     def auth_route(self, i=0):                                      #calculate auth route for keypair i
@@ -221,13 +278,66 @@ class XMSS():
         s = self.sign(msg, i)
         auth_route, i_bms = xmss_route(self.x_bms, self.tree, i)
         self.index+=1
+        self.remaining-=1
         return i, s, auth_route, i_bms, self.pk(i), self.PK_short
 
     def VERIFY_long(self, msg, SIG):                                     #verify xmss sig
-        return xmss_verify(msg, SIG)
+        return xmss_verify_long(msg, SIG)
 
     def VERIFY(self, msg, SIG):                               #verify an xmss sig with shorter PK
-        return xmss_verify_short(msg, SIG)
+        return xmss_verify(msg, SIG)
+
+    def address_add(self, i=None):                           #derive new address from an xmss tree using the same SEED but i base leaves..allows deterministic address creation
+        if i==None: 
+            i = self.signatures-len(self.addresses)
+        if i>self.signatures or i < self.index:
+            print 'ERROR: i cannot be below signing index or above the pre-calculated signature count for xmss tree'
+            return False
+        xmss_array, x_bms, l_bms, privs, pubs = xmss_tree(i,self.private_SEED, self.public_SEED)
+        i_PK = [''.join(xmss_array[-1]),hexlify(self.public_SEED)]
+        new_addr = 'Q'+sha256(''.join(i_PK))+sha256(sha256(''.join(i_PK)))[:4]
+        self.addresses.append((len(self.addresses), new_addr, i))
+        self.subtrees.append((len(self.subtrees), i, xmss_array, x_bms, i_PK))                   #x_bms could be limited to the length..
+        return new_addr
+
+    def address_adds(self, start_i, stop_i):                                #batch creation of multiple addresses..
+        if start_i > self.signatures or stop_i > self.signatures:
+            print 'ERROR: i cannot be greater than pre-calculated signature count for xmss tree'
+            return False
+        if start_i >= stop_i:
+            print 'ERROR: starting i must be lower than stop_i'
+            return False
+
+        for i in range(start_i, stop_i):
+            self.address_add(i)
+        return 
+
+    def SIGN_subtree(self, msg, t=0):                       #default to full xmss tree with max sigs
+        if len(self.addresses) < t+1:                   
+                print 'ERROR: self.addresses new address does not exist'
+                return False
+        i = self.index
+        if self.addresses[t][2] < i:
+                print 'ERROR: xmss index above address derivation i'
+                return False
+        print 'xmss signing subtree (',str(self.addresses[t][2]),' signatures) with OTS n = ', str(self.index)
+        s = self.sign(msg, i)
+        auth_route, i_bms = xmss_route(self.subtrees[t][3], self.subtrees[t][2], i)
+        self.index+=1
+        self.remaining-=1
+        return i, s, auth_route, i_bms, self.pk(i), self.subtrees[t][4]
+
+    def list_addresses(self):                               #list the addresses derived in the main tree
+        addr_arr = []
+        for addr in self.addresses:
+            addr_arr.append(addr[1])
+        return addr_arr
+
+    def address_n(self, t):
+        if len(self.addresses) < t+1:                 
+                print 'ERROR: self.addresses new address does not exist'
+                return False
+        return self.addresses[t][1]
 
 def xmss_tree(n, private_SEED, public_SEED):
     #no.leaves = 2^h
@@ -368,9 +478,9 @@ def verify_auth_SEED(auth_route, i_bms, pub, PK_short):
     return verify_auth(auth_route, i_bms, pub, PK)
 
 # verify an XMSS signature: {i, s, auth_route, i_bms, pk(i), PK(root, x_bms, l_bms)}
-# SIG is a list compossed of: i, s, auth_route, i_bms, pk[i], PK
+# SIG is a list composed of: i, s, auth_route, i_bms, pk[i], PK
 
-def xmss_verify(msg, SIG):
+def xmss_verify_long(msg, SIG):
 
     if verify_wpkey(SIG[1], msg, SIG[4]) == False:
             return False
@@ -381,8 +491,9 @@ def xmss_verify(msg, SIG):
     return True
 
 # same function but verifies using shorter signature where PK: {root, hex(public_SEED)}
+# main verification function..
 
-def xmss_verify_short(msg, SIG):
+def xmss_verify(msg, SIG):
 
     if verify_wpkey(SIG[1], msg, SIG[4]) == False:
             return False
@@ -394,7 +505,6 @@ def xmss_verify_short(msg, SIG):
 
 # l_tree is composed of l pieces of pk (pk_1,..,pk_l) and uses the first (2 *ceil( log(l) )) bitmasks from the randomly generated bm array.
 # where l = 67, # of bitmasks = 14, because h = ceil(log2(l) = 2^h = 7(inclusive..i.e 0,8), and are 2 bm's per layer in tree, r + l
-# need to add code to create bm[] from seed.
 
 def l_bm():
     bm = []
