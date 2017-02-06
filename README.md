@@ -4,7 +4,7 @@ Quantum resistant lamport-diffie, winternitz and merkle tree hash based signatur
 Currently supports: LD-OTS, W-OTS and W-OTS+ keypair gen, signing and verification using sha256.
 Additionally supports: MSS and XMSS(with W-OTS+) signing and verification for many-sign capability..XMSS is far faster but with larger keysizes
 
-Todo: Reduce XMSS keysizes with PRF. Add hypertree support for chained XMSS tree signatures..
+Todo: Add hypertree support for chained XMSS tree signatures..
 
 <b>LD-OTS</b>
 
